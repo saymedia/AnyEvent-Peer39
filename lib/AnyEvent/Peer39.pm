@@ -5,6 +5,13 @@ use 5.010;
 use Mouse;
 use AnyEvent::HTTP;
 use Data::Validator;
+use Mouse::Util::TypeConstraints;
+
+subtype 'CallBack'
+    => as 'Object'
+    => where {
+        $_->meta->has_method('on_failure') && $_->meta->has_method('on_complete')
+    };
 
 has base_url => ( is => 'ro', isa => 'Str', required => 1,);
 has api_key  => ( is => 'ro', isa => 'Str', required => 1,);
@@ -47,7 +54,7 @@ has short_response_format_parser => (
 sub get_page_info {
     state $rule = Data::Validator->new(
         'remote_url' => 'Str',
-        'cb'         => 'CodeRef',
+        'cb'         => 'CallBack',
     )->with('Method');
 
     my ($self, $args) = $rule->validate(@_);
@@ -55,14 +62,15 @@ sub get_page_info {
     my $uri = $self->_build_uri($args->{remote_url});
 
     http_get $uri, timeout => $self->timeout, sub {
-        my ($headers, $body) = @_;
+        my ($body, $headers) = @_;
 
-        # XXX waiting for my kvm to be fixed so I can query peer39 endpoint
-        #if ($headers->{Status} == 200){
-            my $struct = $self->_parse_body($body);
-            $args->{cb}->($struct);
-        #}else{
-        #}
+        if ($headers->{'content-type'} and $headers->{'content-type'} eq 'text/xml'){
+            (my $reason) = $body =~ /message="([^\"]+)"/;
+            return $args->{cb}->on_failure($reason);
+        }
+
+        my $struct = $self->_parse_body($body);
+        $args->{cb}->on_complete($struct);
     }
 }
 
@@ -74,6 +82,9 @@ sub _build_uri {
 sub _parse_body {
     my ($self, $body) = @_;
     
+    # meh
+    $body =~ s/\r\n//;
+
     my $re = $self->short_response_format_parser;
     if ($body =~ /$re/){
         return AnyEvent::Peer39::Response->new(
@@ -93,7 +104,7 @@ use Mouse;
 use Mouse::Util::TypeConstraints;
 
 subtype 'CID'      => as 'ArrayRef';
-subtype 'Language' => as 'Str' => where {$_ ne 0};
+subtype 'Language' => as 'Str' => where {$_ ne "00"};
 
 coerce 'CID' => from 'Str' => via {
     my $strs = $_; 
@@ -138,28 +149,81 @@ __END__
 
     use strict;
     use warnings;
+
     use 5.010;
 
-    use AnyEvent::Peer39;
     use AnyEvent;
+    use AnyEvent::Peer39;
+    use Mouse::Object;
 
     my $client = AnyEvent::Peer39->new(
-        base_url => 'http://api.peer39.net',
-        api_key  => 'secret_key',
+        base_url => 'http://sandbox.api.peer39.net:8080',
+        api_key  => 'NwH7OeBv/4cSJEcpby8fbowEVshWUO5xu1soA12uAYU=',
     );
 
     my $cv = AnyEvent->condvar();
     $cv->begin;
 
-    my $cb = sub {
-        my $res = shift;
-        if ($res->is_done){
-            say $res->language;
-        }else{
-            say "failed";
+    my $cb = Mouse::Object->new();
+    $cb->meta->add_method(
+        on_complete => sub {
+            my ($self, $res) = @_;
+            if ($res->is_done){
+                say "Done ! language is ".$res->language;
+            }else{
+                say "Not done yet";
+            }
+            $cv->end;
         }
-        $cv->end;
-    };
+    );
+    $cb->meta->add_method(
+        on_failure => sub {
+            my ($self, $res) = @_;
+            say "not ok -> $res";
+            $cv->end;
+        }
+    );
 
-    $client->get_page_info({remote_url => 'http://www.techcrunch.com/', cb => $cb});
+    $client->get_page_info({
+        remote_url => 'http://www.techcrunch.com/', 
+        cb         => $cb
+    });
+
     $cv->recv;
+
+=head1 DESCRIPTION
+
+=head1 ATTRIBUTES
+
+=head2 base_url (string)
+
+Your base url to access the service
+
+=head2 api_key (string)
+
+Your API key to access the service
+
+=head2 timeout (int)
+
+Timeout, default 1 second
+
+=head2 targeting_path (string)
+
+path to reach the targeting path, default is B</proxy/targeting>
+
+=head2 short_response_format_parser (regex)
+
+regex to parse the short format
+
+=head1 METHODS
+
+=head2 get_page_info (remote_url => $url, cb => $cb)
+
+=over 4
+
+=item B<remote_url> (string)
+
+=item B<cb> (object) should implement at least two methods: B<on_complete> and B<on_failure>
+
+=back
+
