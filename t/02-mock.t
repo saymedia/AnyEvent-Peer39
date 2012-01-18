@@ -47,7 +47,7 @@ test_tcp(
                 on_failure => sub {
                     my ($self, $res) = @_;
                     if ($tests{$test}->{status} eq 'error'){
-                        pass;
+                        is $res, 'Authentication Error';
                     }else{
                         fail "this test should not fail";
                     }
@@ -74,7 +74,8 @@ test_tcp(
                     my $respond = shift;
                     my $file = 't/data/'.$key;
                     my $content = LoadFile($file);
-                    return $respond->([200, [], [$content->{body}]]);
+                    my $headers = defined $content->{headers} ?  $content->{headers} : [];
+                    return $respond->([200, $headers, [$content->{body}]]);
                 }
             }
         };

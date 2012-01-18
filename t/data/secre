@@ -1,3 +1,4 @@
-body: <?xml version="1.0" encoding="UTF-8"?><responseContainer><service
-targetType="12" responseType="1" languageCode="00" /><log status="FAILURE"
-message="Authentication Error" code="101"></log></responseContainer>
+headers:
+    - Content-Type
+    - text/xml
+body: '<?xml version="1.0" encoding="UTF-8"?><responseContainer><service targetType="12" responseType="1" languageCode="00" /><log status="FAILURE" message="Authentication Error" code="101"></log></responseContainer>'
