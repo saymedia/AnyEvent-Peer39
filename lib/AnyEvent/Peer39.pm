@@ -64,6 +64,12 @@ sub get_page_info {
     http_get $uri, timeout => $self->timeout, sub {
         my ($body, $headers) = @_;
 
+        # AE::HTTP sets the status code to something >= 595 when there is
+        # a problem with the SSL cert., proxy error, timeout, etc
+        if ($headers->{Status} >= 595) {
+            return $args->{cb}->on_failure($headers->{Reason});
+        }
+
         if ($headers->{'content-type'} and $headers->{'content-type'} eq 'text/xml'){
             (my $reason) = $body =~ /message="([^\"]+)"/;
             return $args->{cb}->on_failure($reason);

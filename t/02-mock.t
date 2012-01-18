@@ -5,7 +5,7 @@ use 5.010;
 use Test::TCP;
 use YAML::Syck;
 use Test::More;
-use Test::Requires qw(Plack::Builder Plack::Handler::Twiggy Try::Tiny);
+use Test::Requires qw(Plack::Builder Plack::Handler::Twiggy);
 use Test::Requires { 'Plack::Request' => '0.99' };
 use Mouse::Object;
 
@@ -72,6 +72,7 @@ test_tcp(
 
                 return sub {
                     my $respond = shift;
+
                     my $file = 't/data/'.$key;
                     my $content = LoadFile($file);
                     my $headers = defined $content->{headers} ?  $content->{headers} : [];
