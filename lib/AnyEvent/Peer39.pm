@@ -70,6 +70,9 @@ sub get_page_info {
         }
 
         my $struct = $self->_parse_body($body);
+        if (!$struct) {
+            return $args->{cb}->on_failure("can't parse the response");
+        }
         $args->{cb}->on_complete($struct);
     }
 }

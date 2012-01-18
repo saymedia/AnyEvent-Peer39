@@ -2,8 +2,10 @@ use strict;
 use warnings;
 use 5.010;
 
-use AnyEvent::Peer39;
 use Test::More;
+use Mouse::Object;
+
+use AnyEvent::Peer39;
 
 plan tests => 7;
 
