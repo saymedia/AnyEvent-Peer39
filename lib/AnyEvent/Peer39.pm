@@ -160,8 +160,8 @@ __END__
     use Mouse::Object;
 
     my $client = AnyEvent::Peer39->new(
-        base_url => 'http://sandbox.api.peer39.net:8080',
-        api_key  => 'NwH7OeBv/4cSJEcpby8fbowEVshWUO5xu1soA12uAYU=',
+        base_url => 'http://api.peer39.net',
+        api_key  => 'foobar',
     );
 
     my $cv = AnyEvent->condvar();
