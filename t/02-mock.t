@@ -1,7 +1,6 @@
-use strict;
-use warnings;
-use 5.010;
 
+use 5.10.0;
+use common::sense;
 use Test::TCP;
 use YAML::Syck;
 use Test::More;
@@ -11,79 +10,88 @@ use Mouse::Object;
 
 use AnyEvent::Peer39;
 
-plan tests => 2;
+plan tests => 3;
 
-my %tests = (
-    'secret' => { pu => 'http://foo', status => 'done' },
-    'secre'  => { pu => 'http://foo', status => 'error' },
+my @tests = (
+    {
+        key  => "secre",
+        url  => "http://foo",
+        type => "failure",
+    },
+    {
+        key  => "secret",
+        url  => "http://foo",
+        type => "success",
+    },
 );
 
-test_tcp(
-    client => sub {
-        my $port = shift;
-        my $url = "http://localhost:$port";
+sub client {
+    my $port     = shift;
+    my $endpoint = "http://localhost:$port";
 
-        foreach my $test (keys %tests){
-            my $client = AnyEvent::Peer39->new(
-                api_key  => $test,
-                base_url => $url,
-            );
-            my $cv = AE::cv;
-            $cv->begin;
+    my $cv = AE::cv;
 
-            my $cb = Mouse::Object->new();
-            $cb->meta->add_method(
-                on_complete => sub {
-                    my ($self, $res) = @_;
-                    if ($tests{$test}->{status} eq 'done'){
-                        ok $res->is_done;
-                    }else{
-                        fail "this test should fail";
+    for my $test (@tests) {
+        $cv->begin;
+
+        my $client = AnyEvent::Peer39->new(
+            api_key  => $test->{key},
+            base_url => $endpoint,
+        );
+
+        $client->get_page_info(
+            remote_url => $test->{url},
+            cb         => sub {
+                my ($response) = @_;
+
+                given ($test->{type}) {
+                    when ("failure") {
+                        ok $response->is_failure, "Expected failure";
+                        is $response->message, "Authentication Error";
                     }
-                    $cv->end;
-                }
-            );
-            $cb->meta->add_method(
-                on_failure => sub {
-                    my ($self, $res) = @_;
-                    if ($tests{$test}->{status} eq 'error'){
-                        is $res, 'Authentication Error';
-                    }else{
-                        fail "this test should not fail";
+                    when ("success") {
+                        ok $response->is_success, "Expected success";
                     }
-                    $cv->end;
+                    default {
+                        fail "Broken plan";
+                    }
                 }
-            );
-            $client->get_page_info({
-                remote_url => $tests{$test}->{pu},
-                cb         => $cb
-            });
-            $cv->recv;
-        }
-    },
-    server => sub {
-        my $port = shift;
 
-        my $app = builder {
-            mount '/proxy/targeting' => sub {
-                my $env = shift;
-                my $req = Plack::Request->new($env);
-                my $key = $req->param('cc');
+                $cv->end;
+            },
+        );
+    }
 
-                return sub {
-                    my $respond = shift;
+    $cv->recv;
+}
 
-                    my $file = 't/data/'.$key;
-                    my $content = LoadFile($file);
-                    my $headers = defined $content->{headers} ?  $content->{headers} : [];
-                    return $respond->([200, $headers, [$content->{body}]]);
-                }
+sub server {
+    my $port = shift;
+
+    my $app = builder {
+        mount '/proxy/targeting' => sub {
+            my $env = shift;
+            my $req = Plack::Request->new($env);
+            my $key = $req->param('cc');
+
+            return sub {
+                my $respond = shift;
+
+                my $file = 't/data/'.$key;
+                my $content = LoadFile($file);
+                my $headers = $content->{headers} // [];
+                return $respond->([200, $headers, [$content->{body}]]);
             }
-        };
+        }
+    };
 
-        my $server = Plack::Handler::Twiggy->new(
-            host => '127.0.0.1',
-            port => $port,
-        )->run($app);
-    },
+    my $server = Plack::Handler::Twiggy->new(
+        host => '127.0.0.1',
+        port => $port,
+    )->run($app);
+}
+
+test_tcp(
+    client => \&client,
+    server => \&server,
 );
