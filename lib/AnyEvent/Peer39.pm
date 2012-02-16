@@ -7,11 +7,7 @@ use AnyEvent::HTTP;
 use Data::Validator;
 use Mouse::Util::TypeConstraints;
 
-subtype 'CallBack'
-    => as 'Object'
-    => where {
-        $_->meta->has_method('on_failure') && $_->meta->has_method('on_complete')
-    };
+our $VERSION = "0.2";
 
 has base_url => ( is => 'ro', isa => 'Str', required => 1,);
 has api_key  => ( is => 'ro', isa => 'Str', required => 1,);
@@ -29,7 +25,7 @@ has _api_url => (
     lazy    => 1,
     default => sub {
         my $self = shift;
-        my $uri = sprintf "%s%s?cc=%s", 
+        my $uri = sprintf "%s%s?cc=%s",
             $self->base_url,
             $self->targeting_path,
             $self->api_key;
@@ -51,35 +47,59 @@ has short_response_format_parser => (
     }
 );
 
+sub _failure {
+    my ($self, $message) = @_;
+
+    return AnyEvent::Peer39::Response->new(
+        version => -1,
+        type    => "failure",
+        message => $message,
+    );
+}
+
 sub get_page_info {
     state $rule = Data::Validator->new(
         'remote_url' => 'Str',
-        'cb'         => 'CallBack',
+        'cb'         => 'CodeRef',
     )->with('Method');
 
     my ($self, $args) = $rule->validate(@_);
 
     my $uri = $self->_build_uri($args->{remote_url});
 
-    http_get $uri, timeout => $self->timeout, sub {
+    my $guard;
+    $guard = http_get $uri, timeout => $self->timeout, sub {
         my ($body, $headers) = @_;
+
+        $guard = undef;
 
         # AE::HTTP sets the status code to something >= 595 when there is
         # a problem with the SSL cert., proxy error, timeout, etc
         if ($headers->{Status} >= 595) {
-            return $args->{cb}->on_failure($headers->{Reason});
+            return $args->{cb}->(
+                $self->_failure($headers->{Reason})
+            );
         }
 
-        if ($headers->{'content-type'} and $headers->{'content-type'} eq 'text/xml'){
-            (my $reason) = $body =~ /message="([^\"]+)"/;
-            return $args->{cb}->on_failure($reason);
-        }
+        if (!($headers->{'content-type'} and
+              $headers->{'content-type'} eq 'text/xml'))
+        {
+            my $response = $self->_parse_body($body);
 
-        my $struct = $self->_parse_body($body);
-        if (!$struct) {
-            return $args->{cb}->on_failure("can't parse the response");
+            if ($response) {
+                $args->{cb}->($response);
+            }
+            else {
+                $args->{cb}->(
+                    $self->_failure("Unable to parse response")
+                );
+            }
         }
-        $args->{cb}->on_complete($struct);
+        else {
+            my ($reason) = ($body =~ /message="([^\"]+)"/);
+
+            $args->{cb}->( $self->_failure($reason) );
+        }
     }
 }
 
@@ -90,15 +110,17 @@ sub _build_uri {
 
 sub _parse_body {
     my ($self, $body) = @_;
-    
-    # meh
+
     $body =~ s/\r\n//;
 
     my $re = $self->short_response_format_parser;
+
     if ($body =~ /$re/){
+        my @types = qw( success failure pending );
+
         return AnyEvent::Peer39::Response->new(
             version  => $+{version},
-            type     => $+{resp_type},
+            type     => $types[$+{resp_type}],
             language => $+{lng_code},
             cids     => $+{cids},
             adstats  => $+{adstats},
@@ -116,7 +138,7 @@ subtype 'CID'      => as 'ArrayRef';
 subtype 'Language' => as 'Str' => where {$_ ne "00"};
 
 coerce 'CID' => from 'Str' => via {
-    my $strs = $_; 
+    my $strs = $_;
     my @cids = split /;/, $strs;
     @cids = map {
         my ($cat, $indice) = split/:/, $_;
@@ -127,27 +149,33 @@ coerce 'CID' => from 'Str' => via {
 
 coerce 'Language' => from 'Str' => via {return 'Unknown'};
 
+enum 'Peer39ResponseType' => qw( success pending failure );
+
 # XXX need to do something with the version number at some point
 has version  => (is => 'ro', isa => 'Int', required => 1);
-has type     => (is => 'ro', isa => 'Int', required => 1);
+has type     => (is => 'ro', isa => 'Peer39ResponseType', required => 1);
 has adstats  => (is => 'ro', isa => 'Str');
+has message  => (is => 'ro', isa => 'Str');
 
-has cids     => (is => 'ro', isa => 'CID',      required => 1, coerce => 1);
-has language => (is => 'ro', isa => 'Language', required => 1, coerce => 1);
+has cids     => (is => 'ro', isa => 'CID', coerce => 1, default => sub { [] });
+has language => (is => 'ro', isa => 'Language', coerce => 1);
 
-sub is_done {
+sub is_success {
     my $self = shift;
-    $self->type == 0 ? return 1 : return 0;
+
+    return $self->type eq "success";
 }
 
 sub is_failure {
     my $self = shift;
-    $self->type == 1 ? return 1 : return 0;
+
+    return $self->type eq "failure"
 }
 
 sub is_pending {
     my $self = shift;
-    $self->type == 2 ? return 1 : return 0;
+
+    return $self->type eq "pending";
 }
 
 1;

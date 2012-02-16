@@ -10,7 +10,7 @@ use Mouse::Object;
 
 use AnyEvent::Peer39;
 
-plan tests => 1;
+plan tests => 2;
 
 test_tcp(
     client => sub {
@@ -21,23 +21,25 @@ test_tcp(
             api_key  => 'secret',
             base_url => $url,
         );
+
         my $cv = AE::cv;
         $cv->begin;
 
-        my $cb = Mouse::Object->new();
-        $cb->meta->add_method(on_complete => sub {});
-        $cb->meta->add_method(
-            on_failure => sub {
-                is $_[1], 'Connection timed out';
-                $cv->end;
-            }
-        );
-        $client->get_page_info({
+        $client->get_page_info(
             remote_url => 'http://foo',
-            cb         => $cb
-        });
+            cb         => sub {
+		my ($response) = @_;
+
+		ok $response->is_failure;
+		is $response->message, "Connection timed out";
+
+		$cv->end;
+	    }
+        );
+
         $cv->recv;
     },
+
     server => sub {
         my $port = shift;
 
