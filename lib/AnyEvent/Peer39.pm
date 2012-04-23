@@ -9,9 +9,10 @@ use Mouse::Util::TypeConstraints;
 
 our $VERSION = "0.2";
 
-has base_url => ( is => 'ro', isa => 'Str', required => 1,);
-has api_key  => ( is => 'ro', isa => 'Str', required => 1,);
-has timeout  => ( is => 'ro', isa => 'Int', default  => 1,);
+has base_url     => ( is => 'ro', isa => 'Str', required => 1,);
+has api_key      => ( is => 'ro', isa => 'Str', required => 1,);
+has account_name => ( is => 'ro', isa => 'Str', required => 1,);
+has timeout      => ( is => 'ro', isa => 'Int', default  => 1,);
 
 has targeting_path => (
     is      => 'ro',
@@ -25,10 +26,13 @@ has _api_url => (
     lazy    => 1,
     default => sub {
         my $self = shift;
-        my $uri = sprintf "%s%s?cc=%s",
+
+        my $uri = sprintf "%s%s?cc=%s&ct=%s",
             $self->base_url,
             $self->targeting_path,
-            $self->api_key;
+            $self->api_key,
+            $self->account_name;
+
         return $uri;
     }
 );
