@@ -35,6 +35,7 @@ sub client {
         $cv->begin;
 
         my $client = AnyEvent::Peer39->new(
+            account_name => "test",
             api_key  => $test->{key},
             base_url => $endpoint,
         );
