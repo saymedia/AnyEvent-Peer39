@@ -18,6 +18,7 @@ test_tcp(
         my $url = "http://localhost:$port";
 
         my $client = AnyEvent::Peer39->new(
+            account_name => "test",
             api_key  => 'secret',
             base_url => $url,
         );
