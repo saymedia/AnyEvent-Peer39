@@ -7,7 +7,7 @@ use AnyEvent::HTTP;
 use Data::Validator;
 use Mouse::Util::TypeConstraints;
 
-our $VERSION = "0.2";
+our $VERSION = "0.3";
 
 has base_url     => ( is => 'ro', isa => 'Str', required => 1,);
 has api_key      => ( is => 'ro', isa => 'Str', required => 1,);
