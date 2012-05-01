@@ -7,7 +7,7 @@ use AnyEvent::HTTP;
 use Data::Validator;
 use Mouse::Util::TypeConstraints;
 
-our $VERSION = "0.3";
+our $VERSION = "0.31";
 
 has base_url     => ( is => 'ro', isa => 'Str', required => 1,);
 has api_key      => ( is => 'ro', isa => 'Str', required => 1,);
@@ -128,6 +128,7 @@ sub _parse_body {
             language => $+{lng_code},
             cids     => $+{cids},
             adstats  => $+{adstats},
+	    body     => $body,
         );
     }
     return undef;
@@ -163,6 +164,8 @@ has message  => (is => 'ro', isa => 'Str');
 
 has cids     => (is => 'ro', isa => 'CID', coerce => 1, default => sub { [] });
 has language => (is => 'ro', isa => 'Language', coerce => 1);
+# adding the full body I will update this client to move most of this logic into Pigeon
+has body => (is => 'ro', isa => 'Str', default => sub { "" });
 
 sub is_success {
     my $self = shift;
