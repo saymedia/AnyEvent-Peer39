@@ -6,6 +6,7 @@ use Mouse;
 use AnyEvent::HTTP;
 use Data::Validator;
 use Mouse::Util::TypeConstraints;
+use URI::Escape ();
 
 our $VERSION = "0.31";
 
@@ -109,6 +110,10 @@ sub get_page_info {
 
 sub _build_uri {
     my ($self, $remote_url) = @_;
+
+    # URI escape the '&' and ';' character
+    $remote_url = URI::Escape::uri_escape($remote_url);
+
     return sprintf "%s&pu=%s", $self->_api_url, $remote_url;
 }
 

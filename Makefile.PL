@@ -8,7 +8,7 @@ WriteMakefile(
         Mouse           => 0,
         AnyEvent::HTTP  => 0,
         Data::Validator => 0,
-        Data::Validator => 0,
+        URI::Escape => 0,
     },
     BUILD_REQUIRES => {
         Test::TCP => 0,
