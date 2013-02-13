@@ -8,7 +8,7 @@ use Data::Validator;
 use Mouse::Util::TypeConstraints;
 use URI::Escape ();
 
-our $VERSION = "0.31";
+our $VERSION = "0.32";
 
 has base_url     => ( is => 'ro', isa => 'Str', required => 1,);
 has api_key      => ( is => 'ro', isa => 'Str', required => 1,);
